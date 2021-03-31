@@ -9,7 +9,9 @@ import random
 from reconchess import *
 import os
 
-STOCKFISH_ENV_VAR = '/usr/local/Cellar/stockfish/13/bin/stockfish'
+
+
+STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
 os.environ[STOCKFISH_ENV_VAR] = '/usr/local/Cellar/stockfish/13/bin/stockfish'
 
 
