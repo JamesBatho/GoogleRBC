@@ -334,7 +334,7 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  Taken != requested? This means we captured too early
         #   -  Captured  
         
-
+        print('Start of handle move result we have  possible boards:  ', len(self.possible_boards))
 
         if requested_move == None:
             print('we didnt requested a move')
@@ -370,7 +370,7 @@ class GoogleWantsOurAlgorithm(Player):
 
             else:
                 # if we tried to make a move but couldnt - don't update any boards 
-                # newBoards = self.possible_boards
+                newBoards = self.possible_boards
                 
                 ### TODO ####
                 # there is information here
@@ -379,21 +379,22 @@ class GoogleWantsOurAlgorithm(Player):
                 # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
                 ### TODO ### 
                 # if it was a pawn
-                for k in self.possible_boards:     
-                    temp_board.reset()           
-                    temp_board.set_fen(k)
+                # for k in self.possible_boards:     
+                #     temp_board.reset()           
+                #     temp_board.set_fen(k)
 
-                    if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
-                        # if it moved diagonally (modulus 8 is not the same)
-                        if requested_move.to_square % 8 != requested_move.from_square % 8:
-                            continue
-                        else: 
-                            newBoards[temp_board.fen()] = 1
+                #     if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
+                #         # if it moved diagonally (modulus 8 is not the same)
+                #         if requested_move.to_square % 8 != requested_move.from_square % 8:
+                #             continue
+                #         else: 
+                #             newBoards[temp_board.fen()] = 1
                 #  * what information can we get from this scenario
                 #  * e.g. a pawn that couldn't take but tried
 
             self.possible_boards = newBoards
 
+            print('end of handle move result we have  possible boards:  ', len(self.possible_boards))
 
     def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
                         game_history: GameHistory):
