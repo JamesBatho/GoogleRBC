@@ -51,7 +51,7 @@ class GoogleWantsOurAlgorithm(Player):
         self.known_squares = [];
 
         # how about all the squares that could attack the king
-        self.num_king_attackers = dict(zip(L1,L2));
+        self.num_king_attackers = dict(zip(self.board_squares,copy.deepcopy(L2)));
 
         # keep track of the  'benefit' of sensing a certain square. This will inform the sense algorithm
         self.sense_score = dict(zip(L1,L2));
@@ -105,7 +105,7 @@ class GoogleWantsOurAlgorithm(Player):
 
         pass
 
-    def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 50):
+    def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 20 , attackers_gain = 100 ):
         ## TODO ## 
         # add a score for the squares that could attack your peices
         # add a score for stockfish's predicted move
@@ -114,6 +114,10 @@ class GoogleWantsOurAlgorithm(Player):
         # we are guarenteed to pick somewhere internal: so let's get the surrounding squares
         num_boards = len(self.possible_boards)
         for square in self.board_squares:
+            # attacker score
+
+            attacker_score = self.num_king_attackers[square] / num_boards
+
             # get the piece score
             piece_score = 0
             for i in range(len(self.pieces)):
@@ -125,13 +129,14 @@ class GoogleWantsOurAlgorithm(Player):
             max_num = max(self.piece_count[square])
             max_prob = max_num / num_boards
             
+            # if we have perfect info, the score is zero
             if max_prob == 1 or max_prob == 0:
                 self.sense_score[square] = 0
             else:
                 prob_score = 1 / max(1 - max_prob  , max_prob )
                 
                 # take the gains into consideration
-                self.sense_score[square] = piece_gain * piece_score + prob_gain * prob_score
+                self.sense_score[square] = piece_gain * piece_score + prob_gain * prob_score + attackers_gain * attacker_score
 
                 print(piece_gain * piece_score , prob_gain * prob_score)
         # add booster for if piece was captured
@@ -280,14 +285,18 @@ class GoogleWantsOurAlgorithm(Player):
 
         # reset the board count
         temp_board = chess.Board()
+
+        # reset
+        L2 = [0] * 64
+        self.num_king_attackers = dict(zip(self.board_squares,copy.deepcopy(L2)));
         self.piece_count = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros) ))
 
         # grab the first board
         b1 = list(self.possible_boards.keys())[0]
-        temp_board.set_fen(b) 
+        temp_board.set_fen(b1) 
 
         # where is our king
-        our_king_square = chosen_board.king(self.color)
+        our_king_square = temp_board.king(self.color)
 
 
         for b in self.possible_boards:
@@ -295,10 +304,10 @@ class GoogleWantsOurAlgorithm(Player):
             temp_board.set_fen(b)  
 
             # update the enemy attackers on our king
-            # king_attackers = temp_board.attackers(not self.color, our_king_square)
-            # if king_attackers:
-            #     for pos in king_attackers:
-            #         self.num_king_attackers
+            king_attackers = temp_board.attackers(not self.color, our_king_square)
+            if king_attackers:
+                for pos in king_attackers:
+                    self.num_king_attackers[pos] += 1
                               
             # check each square  ## TODO THIS IS BROKEN ###
             for i in range(len(self.board_squares)):
