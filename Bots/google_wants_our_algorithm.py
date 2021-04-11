@@ -45,15 +45,19 @@ class GoogleWantsOurAlgorithm(Player):
         
         # internal squares. we will not sense outside of this region
         self.sense_squares = list(range(9 , 15)) + list(range(17, 23)) + list(range(25, 31)) + list(range(33, 39)) + list(range(41, 47)) + list(range(49 ,55))
+        list_three = [0] * 36
 
         # keep track of squares we have perfect knowlege of?
         self.known_squares = [];
+
+        # how about all the squares that could attack the king
+        self.num_king_attackers = dict(zip(L1,L2));
 
         # keep track of the  'benefit' of sensing a certain square. This will inform the sense algorithm
         self.sense_score = dict(zip(L1,L2));
 
         # score recieved by sensing the square and all surrounding squares
-        self.total_sense_score = dict(zip(L1,L2));
+        self.total_sense_score = dict(zip(self.sense_squares,list_three));
 
         # get the sense mapping
         self.sense_map  = {}
@@ -275,13 +279,27 @@ class GoogleWantsOurAlgorithm(Player):
         #   we also can know the perfect info squares
 
         # reset the board count
+        temp_board = chess.Board()
         self.piece_count = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros) ))
 
-        temp_board = chess.Board()
+        # grab the first board
+        b1 = list(self.possible_boards.keys())[0]
+        temp_board.set_fen(b) 
+
+        # where is our king
+        our_king_square = chosen_board.king(self.color)
+
+
         for b in self.possible_boards:
             temp_board.reset()  
             temp_board.set_fen(b)  
 
+            # update the enemy attackers on our king
+            # king_attackers = temp_board.attackers(not self.color, our_king_square)
+            # if king_attackers:
+            #     for pos in king_attackers:
+            #         self.num_king_attackers
+                              
             # check each square  ## TODO THIS IS BROKEN ###
             for i in range(len(self.board_squares)):
                 square = self.board_squares[i]
@@ -293,6 +311,9 @@ class GoogleWantsOurAlgorithm(Player):
 
                 elif piece == None:
                     self.piece_count[square][0] += 1
+
+
+
 
         # update the scores for each location
         self.compute_scores()
