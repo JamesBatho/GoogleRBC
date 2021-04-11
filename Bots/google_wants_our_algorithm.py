@@ -211,7 +211,7 @@ class GoogleWantsOurAlgorithm(Player):
 
         # if the opponent captured our piece, remove it from our board.
         self.my_piece_captured_square = capture_square
-        new_boards = {}    # if he takes, all old boards are no longer valid
+        new_boards = {}    # if he/she/they takes, all old boards are no longer valid
 
         ########## TODO #############
         # get rid of all these loops!
