@@ -6,7 +6,7 @@ import random
 from reconchess import *
 import os
 import sys
-
+import copy
 
 
 class HelperFunctions():
@@ -28,14 +28,50 @@ class GoogleWantsOurAlgorithm(Player):
         self.color  = None
         self.my_piece_captured_square = None
         self.moved = False
+        # point scores for pieces: I think bishop is worth more  than a knight in this game. ?
+        # zero is for no piece there
+        self.piece_ratings ={0: 0 ,  chess.PAWN: 1 , chess.KNIGHT : 3 ,  chess.BISHOP : 4  ,   chess.ROOK : 5  ,  chess.QUEEN : 10  ,  chess.KING : 20  }
+
+
         # keep track of possible moves to a point
-        L1 = list(range(63))
+        L1 = list(range(64))
         L2 = [0] * 64
+
+        self.board_squares = L1
         self.opponent_moves_to_square = dict(zip(L1,L2))
 
+        # if we want to limit the boards we keep, we will use this. for now this is not in use
         self.max_boards = sys.maxsize # 750 (breaks)
+        
+        # internal squares. we will not sense outside of this region
         self.sense_squares = list(range(9 , 15)) + list(range(17, 23)) + list(range(25, 31)) + list(range(33, 39)) + list(range(41, 47)) + list(range(49 ,55))
 
+        # keep track of squares we have perfect knowlege of?
+        self.known_squares = [];
+
+        # keep track of the  'benefit' of sensing a certain square. This will inform the sense algorithm
+        self.sense_score = dict(zip(L1,L2));
+
+        # score recieved by sensing the square and all surrounding squares
+        self.total_sense_score = dict(zip(L1,L2));
+
+        # get the sense mapping
+        self.sense_map  = {}
+        for square in self.sense_squares:
+            self.sense_map[square] = self.get_surrounding_squares(square)
+
+        # would like to know the number of each peice on a square
+        # these chess.PAWN , chess.KNIGHT ... are just integers 1-6
+        self.pieces = [ 0 , chess.PAWN , chess.KNIGHT , chess.BISHOP , chess.ROOK , chess.QUEEN , chess.KING]
+        l3 = [0] * 7
+        self.lists_of_zeros = []
+        for i in range(len(L1)):
+            self.lists_of_zeros += [copy.deepcopy(l3)]
+
+        self.piece_count = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros)))
+
+        self.piece_probabilities = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros)))
+        ####  STOCKFISH #### 
         STOCKFISH_ENV_VAR = 'STOCKFISH_EXECUTABLE'
         os.environ[STOCKFISH_ENV_VAR] = '/usr/local/Cellar/stockfish/13/bin/stockfish'
         # make sure stockfish environment variable exists
@@ -51,8 +87,59 @@ class GoogleWantsOurAlgorithm(Player):
 
         # initialize the stockfish engine
         self.engine = chess.engine.SimpleEngine.popen_uci(stockfish_path, setpgrp=True)
-
+        #### STOCKFISH ####
     
+
+    def update_total_sense_score(self):
+        # this function builds the sense score recieved by looking at the square in quwstion and all surrounding squares
+        for square in self.sense_squares:
+            self.total_sense_score[square] = sum([self.sense_score[x] for x in self.sense_map[square]])
+
+    def pick_board_to_play(boards):
+
+#    board_value = k1 * variable_one + k2 * variable_two 
+
+        pass
+
+    def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 50):
+        ## TODO ## 
+        # add a score for the squares that could attack your peices
+        # add a score for stockfish's predicted move
+
+
+        # we are guarenteed to pick somewhere internal: so let's get the surrounding squares
+        num_boards = len(self.possible_boards)
+        for square in self.board_squares:
+            # get the piece score
+            piece_score = 0
+            for i in range(len(self.pieces)):
+                # prob times the piece score
+                piece_score += self.piece_ratings[self.pieces[i]] * self.piece_count[square][self.pieces[i]] / num_boards
+
+            # get the probability score
+
+            max_num = max(self.piece_count[square])
+            max_prob = max_num / num_boards
+            
+            if max_prob == 1 or max_prob == 0:
+                self.sense_score[square] = 0
+            else:
+                prob_score = 1 / max(1 - max_prob  , max_prob )
+                
+                # take the gains into consideration
+                self.sense_score[square] = piece_gain * piece_score + prob_gain * prob_score
+
+                print(piece_gain * piece_score , prob_gain * prob_score)
+        # add booster for if piece was captured
+        if self.my_piece_captured_square:
+            self.sense_score[self.my_piece_captured_square] += captured_bonus
+
+
+
+    @staticmethod
+    def get_surrounding_squares(num):
+        return [num - 9 , num - 8 , num - 7 , num - 1 , num  ,num + 1 , num  + 7 , num + 8 , num + 9]
+
     @staticmethod
     def get_pseudo_legal_moves(board):
         '''
@@ -77,11 +164,10 @@ class GoogleWantsOurAlgorithm(Player):
         return moves
 
 
-
-
+ 
 
     def handle_game_start(self, color: Color, board: chess.Board, opponent_name: str):
-        self.possible_boards[board.fen()] = 1   # store the first board with a probablilty of one
+        self.possible_boards[board.fen()] = 1   # store the first board with a probablilty of one # fen is string of board
         self.color = color   # White  = True, Black = False
         if self.color:
             print("We are playing White")
@@ -101,6 +187,10 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  TODO Get Rid of loops!
         #   -  TODO Make the score (currently 1) reflect some information about the board?
 
+        # make every possible board
+
+        # print('S handle_opponent_move_result:  ', len(self.possible_boards))
+        # print(' ')
         # bad implimentation by authors
         if self.moved == False  and self.color == chess.WHITE:
             print('in here')
@@ -127,6 +217,7 @@ class GoogleWantsOurAlgorithm(Player):
 
             if captured_my_piece:                                   # If he captured
                 moves = self.get_pseudo_legal_moves(temp_board)
+
                 for move in moves:
                     if move.to_square == capture_square:
                         # for all possible moves of this board, set a new board
@@ -134,32 +225,29 @@ class GoogleWantsOurAlgorithm(Player):
                         temp.push(move)
                         new_boards[temp.fen()] = 1       
             else:                                                   # no capture, all boards still valid
-                new_boards[b] = 1 
+                # keep the orig board, but change the turn first
+                temp1 = chess.Board()
+                temp1.set_fen(b)
+                temp1.turn = not temp1.turn
+                new_boards[temp1.fen()] = 1 
+                
+                # now evaluate the possible moces
                 moves = self.get_pseudo_legal_moves(temp_board) 
                 for move in moves:
                     if temp_board.piece_at(move.to_square) is None:   # make sure there is no piece there
                         # for all possible moves of this board, set a new board
-                        temp = temp_board.copy()
+                        #temp = temp_board.copy()
+                        temp = chess.Board()
+                        temp.set_fen(b) 
+
                         temp.push(move)
                         new_boards[temp.fen()] = 1     
 
         # set the new boards
         self.possible_boards = new_boards
 
-
-        # temporary random limiting
-        ###### TODO ######
-        # We run into problems if we do this for too small a max_board size
-        #    * essentially we find out later that we threw out the true board
-        #    * and then it breaks because the boards are all invalid and thrown out
-        ###### TODo ######
-
-        if len(self.possible_boards) > self.max_boards:
-
-            self.possible_boards = dict(random.sample(self.possible_boards .items(), self.max_boards))
-            print('in , ' , len(self.possible_boards))
-
-
+        # print('E handle_opponent_move_result:  ', len(self.possible_boards))
+        # print(' ')
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> \
             Optional[Square]:
@@ -174,32 +262,48 @@ class GoogleWantsOurAlgorithm(Player):
         #  *   2. a square we are thinking about captureing
         #  *   3. then a random square within the inside border
 
-        ###### TODO ########
-        # better algorithm here
-        ###### TODO ########
 
 
-        chosen_board_idx = random.choice(list(self.possible_boards.keys()))
+        # print('S choose_sense:  ', len(self.possible_boards))
+        # print(' ')
 
-        chosen_board = chess.Board()
-        chosen_board.set_fen(chosen_board_idx)
-        # if our piece was just captured, sense where it was captured
-        if self.my_piece_captured_square:
-            return self.my_piece_captured_square
+        # part one: update the score of each location
+        # idea here:
+        #   * add up the predicted pieces for each board at every square
+        # improvements: we can keep track of how many pieces the oponent has
+        #   to sace time, once that nummber is reached we stop
+        #   we also can know the perfect info squares
 
-        # if we might capture a piece when we move, sense where the capture will occur
-        future_move = self.choose_move(move_actions, seconds_left)
-        if future_move is not None and chosen_board.piece_at(future_move.to_square) is not None:
-            return future_move.to_square
+        # reset the board count
+        self.piece_count = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros) ))
 
-        # otherwise, just randomly choose a sense action, but don't sense on a square where our pieces are located
-        for square, piece in chosen_board.piece_map().items():
-            if piece.color == self.color:
-                sense_actions.remove(square)
+        temp_board = chess.Board()
+        for b in self.possible_boards:
+            temp_board.reset()  
+            temp_board.set_fen(b)  
+
+            # check each square  ## TODO THIS IS BROKEN ###
+            for i in range(len(self.board_squares)):
+                square = self.board_squares[i]
+                piece = temp_board.piece_at(square)
+
+                                         # grab a piece
+                if piece != None and piece.color != self.color:
+                    self.piece_count[square][piece.piece_type] += 1               # add one to our count
+
+                elif piece == None:
+                    self.piece_count[square][0] += 1
+
+        # update the scores for each location
+        self.compute_scores()
+
+        # update the total sense score
+        self.update_total_sense_score()
         
-        sense_actions = list(set(sense_actions) & set(self.sense_squares))
 
-        return random.choice(sense_actions)
+        
+        
+        return max(self.total_sense_score, key=self.total_sense_score.get)
 
 
 
@@ -214,7 +318,9 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  If a conflict exists, pop the entry from the dictionary. 
         #   - TODO do not check entries where we have perfect information (saves computation)
 
-
+        # print('S handle_sense_result:  ', len(self.possible_boards))
+        # print(' ')
+        # print(sense_result)
         # we have sensed, now let's throw away any boards which don't match our sense
         # this is done by checking every sceneario and 
         temp_board = chess.Board()
@@ -264,8 +370,8 @@ class GoogleWantsOurAlgorithm(Player):
                 newBoards[k] = 1
 
         self.possible_boards = newBoards
-
-
+        # print('S handle_sense_result:  ', len(self.possible_boards))
+        # print(' ')
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
         # ______ Variables: 
         #   -  move_actions – A list containing the valid chess.Move you can choose.
@@ -281,19 +387,29 @@ class GoogleWantsOurAlgorithm(Player):
         ###### TODO ########
 
         # remove boards that have moves not in the legal move list
-        print('At start of choose move we have possible boards ', len(self.possible_boards))
+        # print('S choose_move:  ', len(self.possible_boards))
+        # print(' ')
         temp_board = chess.Board()
         newBoards = {}
         for k in self.possible_boards:
             temp_board.reset()           
             temp_board.set_fen(k)
-            board_moves = self.get_legal_moves(temp_board)      # get the legal moves for the board
+            if temp_board.turn != self.color:
+                print('THE BOARD IS ON THE WRONG TURN! THIS IS BAD')
+
+            board_moves = self.get_pseudo_legal_moves(temp_board)      # get the legal moves for the board
+            l_board_moves = self.get_pseudo_legal_moves(temp_board)      # get the legal moves for the board
+            if board_moves != l_board_moves:
+                print('legal is not pseudo_legal_moves  ')
             if not all(x in move_actions for x in board_moves):        # are any moves from our board that are not in the list of possible moves
                 continue                           # if so, get rid of that board
             else:
                 newBoards[k] = 1
         self.possible_boards = newBoards    
         print('After filtering we now have possible boards:  ', len(self.possible_boards))
+
+        
+
 
         chosen_board_idx = random.choice(list(self.possible_boards.keys()))
 
@@ -319,7 +435,7 @@ class GoogleWantsOurAlgorithm(Player):
             print('Stockfish Engine bad state at "{}"'.format(chosen_board.fen()))
 
         # if all else fails, pass
-        print('We return none here')
+        # print('We return none here')
         return None
 
     def handle_move_result(self, requested_move: Optional[chess.Move], taken_move: Optional[chess.Move],
@@ -334,11 +450,30 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  Taken != requested? This means we captured too early
         #   -  Captured  
         
-        print('Start of handle move result we have  possible boards:  ', len(self.possible_boards))
+
+        # not the same
+            # pawmn takes but cant - all boards where you could take no longer valie
+            # pawn forward  but cant - any board that doesnt have oponenet piece there is no god
+            # pawn forward two - only gets one
+            # castling - cant 
+            # rook , bishop , queen  go somewhere but stop short. any board with no piece where the rbq ends, not valie
+
+
+
+        # print('S handle_move_result:  ', len(self.possible_boards))
+        # print(' ')
+
+
+        if captured_opponent_piece:
+            print('captured a piece')
+
+        else:
+            print('did not capture')
 
         if requested_move == None:
             print('we didnt requested a move')
             return 
+
 
         else:
             newBoards = {}
@@ -358,11 +493,13 @@ class GoogleWantsOurAlgorithm(Player):
                         if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None) and (temp_board.piece_at(capture_square).piece_type != chess.KING):
                             temp_board.push(taken_move)
                             newBoards[temp_board.fen()] = 1
+                            
 
                         # we dont capture, and there isn't a piece on our board, keep the board
                         elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):
                             temp_board.push(taken_move)
                             newBoards[temp_board.fen()] = 1
+
 
                         # note the two cases we do not use a board
                         #   *  captured_opponent_pierce is true, and there is no piece there
@@ -370,7 +507,15 @@ class GoogleWantsOurAlgorithm(Player):
 
             else:
                 # if we tried to make a move but couldnt - don't update any boards 
-                newBoards = self.possible_boards
+                newBoards = {}
+                temp_board = chess.Board()
+
+                for k in self.possible_boards:     
+                    temp_board.reset()           
+                    temp_board.set_fen(k)
+                    temp_board.turn = not temp_board.turn
+                    newBoards[temp_board.fen()] = 1
+               
                 
                 ### TODO ####
                 # there is information here
@@ -378,6 +523,8 @@ class GoogleWantsOurAlgorithm(Player):
                 #  if we try to take diagonally and can't.
                 # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
                 ### TODO ### 
+
+
                 # if it was a pawn
                 # for k in self.possible_boards:     
                 #     temp_board.reset()           
@@ -394,7 +541,8 @@ class GoogleWantsOurAlgorithm(Player):
 
             self.possible_boards = newBoards
 
-            print('end of handle move result we have  possible boards:  ', len(self.possible_boards))
+        print('E handle_move_result:  ', len(self.possible_boards))
+        print(' ')
 
     def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
                         game_history: GameHistory):
