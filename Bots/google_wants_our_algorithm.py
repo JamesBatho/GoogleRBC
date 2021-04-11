@@ -8,6 +8,10 @@ import os
 import sys
 import copy
 
+# THIS IS HOW WE GET THE SCORE
+# score = engine.analyse(board, chess.engine.Limit(time=.5))['score']
+# score.pov('white').cp
+
 
 class HelperFunctions():
 
@@ -105,7 +109,7 @@ class GoogleWantsOurAlgorithm(Player):
 
         pass
 
-    def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 20 , attackers_gain = 100 ):
+    def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 20 , attackers_gain = 1000 ):
         ## TODO ## 
         # add a score for the squares that could attack your peices
         # add a score for stockfish's predicted move
@@ -117,6 +121,7 @@ class GoogleWantsOurAlgorithm(Player):
             # attacker score
 
             attacker_score = self.num_king_attackers[square] / num_boards
+            print('attacker_score ' , attacker_score )
 
             # get the piece score
             piece_score = 0
