@@ -38,7 +38,10 @@ class GoogleWantsOurAlgorithm(Player):
         
         self.moved = False                                                                      # used to skip handle_opponent_move_result if we are white and its the first turn
         self.board_eval_time = 0.1                                                              # how long should we evaluate boards    
-        self.possible_boards = {}                                                               # dictionary to keep all posible board fen's and scores ect
+        self.possible_boards = []                                                               # list to keep all posible board fens
+        self.possible_scores    = []                                                               # list to keep all of the scores
+        self.possible_moves = []                                                              # list to keep all engine moves per board
+
         self.color  = None                                                                      # our color, WHITE == 1, BLACK == 0
         self.my_piece_captured_square = None                                                    # if our oponent captures our square, set the key here, otherwise none          
         self.max_board_score = 1000000000                                                       # score for when we can immediately capture the king (breaks stockfish engine)
@@ -81,6 +84,7 @@ class GoogleWantsOurAlgorithm(Player):
         #   - board - chess board object 
         # ______ Output:
         #   - score for the board, relative to the user's color. Evaluated with stockfish
+        #   - our recommended move for this board
 
         try:
             enemy_king_square = board.king(not self.color)                                                                  # check to see if the enemy king is under attack
@@ -88,17 +92,22 @@ class GoogleWantsOurAlgorithm(Player):
                 king_attackers = board.attackers(self.color, enemy_king_square)
             else:                                                                                                           
                 print('ERROR get_board_score 1: theres no KING?')
-                return 0
+                return [None , None]
             
             if king_attackers:                                                                                              # if the enemy King is under attack, set to max score
                 val = self.max_board_score
+                our_move = chess.Move(attacker_square, enemy_king_square)                                                   # move that takes the King
+
             else:                                                                                                           # otherwise use stockfish to analyze
-                score = self.engine.analyse(board, chess.engine.Limit(time=self.board_eval_time))['score']
+                engine_result = self.engine.analyse(board, chess.engine.Limit(time=self.board_eval_time))
+                score = engine_result['score']
                 if score.is_mate():                                                                                         # mate set max score / 2
                     val = self.max_board_score / 2
                 else:                                                                                                       # otherwise get the board score from white perspective
                     val  =score.white().cp
 
+                our_move = engine_result['pv'][0].uci()
+            
             if self.color:                                                                                                  # negate the score if we are black
                 pass
             else:
@@ -107,9 +116,9 @@ class GoogleWantsOurAlgorithm(Player):
         except (chess.engine.EngineError, chess.engine.EngineTerminatedError) as e:                                         # error handling (castling, checks ect)
             print('ERROR get_board_score 2:  -- Engine bad state at "{}"'.format(board.fen()))
             self.engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path)                                          # we need to restart our engine
-            return None                                                                                                     # just return None for now. (could be informatino here)
-        
-        return val                                                                                                          # return the score
+            return [None , None]                                                                                            # just return None for now. (could be informatino here)
+
+        return [val , our_move ]                                                                                                # return the score
 
     def compute_scores(self , piece_gain = 1 , prob_gain = 10 , captured_bonus = 200 , attackers_gain = 100000 ):
         # computes sensing score for each individual square
@@ -173,24 +182,25 @@ class GoogleWantsOurAlgorithm(Player):
             elif piece == None:                                                     # no pieces have key zero
                 self.piece_count[square][0] += 1
 
-        self.updating_datasets += 1
-
-    def choose_board_fen(self , method):
+    def choose_board(self , method):
         # ______ Variables: 
         #   - method - string detailing which way to select the board
         # ______ Output:
-        #   - fen representation of the selected board
+        #   - index for the selected board
 
         if method == 'random':
-            return random.choice(list(self.possible_boards.keys()))                 # pick a random board
+            return random.randint(len(self.possible_boards))                     # get random integer up to length of boards
 
-        elif method == 'worst':                                                     # get the board where we are worst off
-            return min(self.possible_boards, key=self.possible_boards.get)
+        elif method == 'worst':                                                     # get the index of the board where we are worst off
+            return self.possible_scores.index(min(self.possible_scores))                
 
     def handle_game_start(self, color: Color, board: chess.Board, opponent_name: str):
         # initializes the game for our algorithm
 
-        self.possible_boards[board.fen()] = 0                                       # set the board state as our only possible board
+        self.possible_boards    = [board.fen()]                                     # set the board state as our only possible board
+        self.possible_scores    = [0]                                               # set the score to be zero
+        self.possible_moves     = [None]
+
         self.color = color                                                          # COLOR: White == 1 , Black == 0
         
         if self.color:                                                              # Useful for the viewer
@@ -203,7 +213,7 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  captured_my_piece – If the opponent captured one of your pieces, then True, otherwise False.
         #   -  capture_square – If a capture occurred, then the Square your piece was captured on, otherwise None.
 
-        print('handle_opponent_move_result start ')
+        print('handle_opponent_move_result start ' , len(self.possible_boards))
         
         temp_board = chess.Board()                                                  # Make a temp board for us to use 
 
@@ -215,15 +225,18 @@ class GoogleWantsOurAlgorithm(Player):
         self.num_king_attackers = dict(zip(self.board_squares,copy.deepcopy(self.L2)));             # reset our datasets to zeros
         self.piece_count = dict(zip(self.board_squares , copy.deepcopy(self.lists_of_zeros) ))      # reser our datasets to zeros
         
-        b1 = list(self.possible_boards.keys())[0]                                   # Get the square our King is on
+        b1 = self.possible_boards[0]                                   # Get the square our King is on
         temp_board.set_fen(b1) 
         our_king_square = temp_board.king(self.color)
 
         self.my_piece_captured_square = capture_square                              # store the square we were captured on
         
-        new_boards = {}                                                             # new dictionary for board generation  
+        new_boards = []                                                             # new dictionary for board generation  
+        new_scores = []
+        new_moves  = []
 
-        for b in self.possible_boards:                                              # Would be nice if we made this a function, and then used something more efficient than a loop
+        for i in range(len(self.possible_boards)):                               # Would be nice if we made this a function, and then used something more efficient than a loop
+            b = self.possible_boards[i]
             temp_board.reset()                                  
             temp_board.set_fen(b)                                                   # set the current board
 
@@ -233,17 +246,21 @@ class GoogleWantsOurAlgorithm(Player):
                     if move.to_square == capture_square:
                         temp = temp_board.copy()                                                    # update the board
                         temp.push(move)
-                        if temp.fen() not in new_boards.keys():                                     # handle duplicates
-                            new_boards[temp.fen()] = self.get_board_score(temp )             # add the board to our new_boards object
+                        if temp.fen() not in new_boards:                                     # handle duplicates
+                            new_boards = new_boards + [temp.fen()]                                # add the board to our new_boards object
+                            new_scores = new_scores + [self.get_board_score(temp)[0]]
+                            new_moves  = new_moves + [self.get_board_score(temp)[1]]
                             self.update_data_sets(temp ,our_king_square )                           # update our datasets
             
             else:                                                                   # If they don't capture, current boards and all pseudo_legal moves are valid                                       
                 temp1 = chess.Board()                       
                 temp1.set_fen(b)
                 temp1.turn = not temp1.turn                                             # Don't make a move but do change the board's turn
-                if temp1.fen() not in new_boards.keys():                                # handle duplicates
-                    new_boards[temp1.fen()] = self.get_board_score(temp1 )       # add to our new_boards object
-                    self.update_data_sets(temp1 ,our_king_square )                      # update our datasets
+                if temp1.fen() not in new_boards:                                # handle duplicates
+                    new_boards = new_boards + [temp1.fen()]                                # add the board to our new_boards object
+                    new_scores = new_scores + [self.get_board_score(temp1)[0]]
+                    new_moves  = new_moves + [self.get_board_score(temp1)[1]]
+                    self.update_data_sets(temp1 ,our_king_square )                           # update our datasets
                 
                 moves = self.get_pseudo_legal_moves(temp_board)                         # get all pseudo_legal moves
                 for move in moves:                                      
@@ -251,11 +268,15 @@ class GoogleWantsOurAlgorithm(Player):
                         temp = chess.Board()
                         temp.set_fen(b) 
                         temp.push(move)                                                     # update the board
-                        if temp.fen() not in new_boards.keys():                             # handle duplicates
-                            new_boards[temp.fen()] = self.get_board_score(temp )     # add to our new_boards object
-                            self.update_data_sets(temp ,our_king_square )                   # update our datasets
+                        if temp.fen() not in new_boards:                             # handle duplicates
+                            new_boards = new_boards + [temp.fen()]                                # add the board to our new_boards object
+                            new_scores = new_scores + [self.get_board_score(temp)[0]]
+                            new_moves  = new_moves + [self.get_board_score(temp)[1]]
+                            self.update_data_sets(temp ,our_king_square )                           # update our datasets
 
-        self.possible_boards = new_boards                                           # update our possible_boards field to our new_boards object
+        self.possible_boards = new_boards                                                   # update our possible_boards field to our new_boards object
+        self.possible_scores = new_scores
+        self.possible_moves  = new_moves
 
     def choose_sense(self, sense_actions: List[Square], move_actions: List[chess.Move], seconds_left: float) -> \
             Optional[Square]:
@@ -277,9 +298,12 @@ class GoogleWantsOurAlgorithm(Player):
         print('handle_sense_result start')
 
         temp_board = chess.Board()                                                  # Make a temp board for us to use 
-        newBoards = {}                                                              # create an empty dictionary to store our boards
+        new_boards = []
+        new_scores = []
+        new_moves = []                                                              
 
-        for k in self.possible_boards:                                              # iterate through and remove all boards that conflict with our sense results
+        for i in range(len(self.possible_boards)):                                              # iterate through and remove all boards that conflict with our sense results
+            k = self.possible_boards[i]
             temp_board.reset()          
             temp_board.set_fen(k)
             
@@ -300,9 +324,13 @@ class GoogleWantsOurAlgorithm(Player):
                         break
 
             if good:
-                newBoards[k] = self.possible_boards[k]                              # if the board passes all these checks, we keep it
+                new_boards = new_boards + [k]                                # add the board to our new_boards object
+                new_scores = new_scores + [self.possible_scores[i]]
+                new_moves  = new_moves  + [self.possible_moves[i]]
 
-        self.possible_boards = newBoards                                            # update our possible_boards field to our new_boards object
+        self.possible_boards = new_boards                                                   # update our possible_boards field to our new_boards object
+        self.possible_scores = new_scores
+        self.possible_moves  = new_moves                                   
 
     def choose_move(self, move_actions: List[chess.Move], seconds_left: float) -> Optional[chess.Move]:
         # ______ Variables: 
@@ -314,9 +342,12 @@ class GoogleWantsOurAlgorithm(Player):
         print('choose_move')
 
         temp_board = chess.Board()                                                  # Make a temp board for us to use 
-        newBoards = {}                                                              # create an empty dictionary to store our boards
+        new_boards = []
+        new_scores = []
+        new_moves = []                                           
 
-        for k in self.possible_boards:                                              # if our board has a move that isnt in the move list, it is not valid
+        for i in range(len(self.possible_boards)):                                              # if our board has a move that isnt in the move list, it is not valid
+            k = self.possible_boards[i]
             temp_board.reset()           
             temp_board.set_fen(k)
             board_moves = self.get_pseudo_legal_moves(temp_board)                   # get the legal moves for the board
@@ -324,11 +355,17 @@ class GoogleWantsOurAlgorithm(Player):
             if not all(x in move_actions for x in board_moves):                     # check the two lists
                 continue                                                            # if there is a conflict, dont keep the board
             else:
-                newBoards[k] = self.possible_boards[k]                              # otherwise keep it
+                new_boards = new_boards + [k]                                # add the board to our new_boards object
+                new_scores = new_scores + [self.possible_scores[i]]
+                new_moves  = new_moves  + [self.possible_moves[i]]
         
-        self.possible_boards = newBoards                                            # update our possible_boards field to our new_boards object
+        self.possible_boards = new_boards                                                   # update our possible_boards field to our new_boards object
+        self.possible_scores = new_scores
+        self.possible_moves  = new_moves
 
-        chosen_board_fen =  choose_board_fen(self , 'worst')                        # select the board (current options are 'worst' , 'random')
+
+        chosen_board_idx =  self.choose_board('worst')                            # select the board (current options are 'worst' , 'random')
+        chosen_board_fen =  self.possible_boards[chosen_board_idx]
         chosen_board = chess.Board()
         chosen_board.set_fen(chosen_board_fen)
         
@@ -366,11 +403,15 @@ class GoogleWantsOurAlgorithm(Player):
             return 
 
         else:                                                       
-            new_boards = {}                                                                 # create a dictionary to hold our new boards
+            new_boards = []
+            new_scores = []
+            new_moves = []                                           
             temp_board = chess.Board()                                                      # create a new board object to work with
             
             if taken_move is not None:                                                      # A move was succesfully taken
-                for k in self.possible_boards:                                              # iterate through our boards
+
+                for i in range(len(self.possible_boards)):                                              # if our board has a move that isnt in the move list, it is not valid
+                    k = self.possible_boards[i]
                     temp_board.reset()           
                     temp_board.set_fen(k)
                     try:        
@@ -378,11 +419,15 @@ class GoogleWantsOurAlgorithm(Player):
                             if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None)\
                              and (temp_board.piece_at(capture_square).piece_type != chess.KING):                                # capture a piece and the board has a non King piece at move end 
                                 temp_board.push(taken_move)                                                                     # execute the move
-                                new_boards[temp_board.fen()] = 1                                                                # add this board to our tracked boardss (score set later)
+                                new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
+                                new_scores = new_scores + [self.possible_scores[i]]
+                                new_moves  = new_moves  + [self.possible_moves[i]]
                                 
                             elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):    # no capture and the board has no piece at move end
                                 temp_board.push(taken_move)                                                                     # execute the move
-                                new_boards[temp_board.fen()] = 1                                                                # add this board to our tracked boardss (score set later)
+                                new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
+                                new_scores = new_scores + [self.possible_scores[i]]
+                                new_moves  = new_moves  + [self.possible_moves[i]]
                     
                     except:                                                                 # error handling 
                         print(' we failed on  ',taken_move ,'  for board   ', k )           # for now just continue and print where we fail for debugging purposes
@@ -390,22 +435,30 @@ class GoogleWantsOurAlgorithm(Player):
                         continue
 
             else:                                                                           # we tried to move but failed
-                new_boards = {}                                                             # create a dictionary to hold our new boards
+                new_boards = []
+                new_scores = []
+                new_moves = []                                 
                 temp_board = chess.Board()                                                  # create a board object to work with
 
-                for k in self.possible_boards:                                              # just keep all our boards but change their turns
+
+                for i in range(len(self.possible_boards)):                                              # if our board has a move that isnt in the move list, it is not valid
+                    k = self.possible_boards[i]
                     try:
                         temp_board.reset()           
                         temp_board.set_fen(k)
                         temp_board.turn = not temp_board.turn
                         
-                        new_boards[temp_board.fen()] = 1                                    # THIS IS INCOMPLETE! THERE IS INFORMATION HERE
+                        new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
+                        new_scores = new_scores + [self.possible_scores[i]]
+                        new_moves  = new_moves  + [self.possible_moves[i]]
                     
                     except:                                                                 # error handling for debugging purposes 
                         print(' we failed on  ','none' ,'  for board   ', k )
                         continue              
 
-            self.possible_boards = new_boards                                               # set our possible_boards field to the new_boards object
+        self.possible_boards = new_boards                                                   # update our possible_boards field to our new_boards object
+        self.possible_scores = new_scores
+        self.possible_moves  = new_moves
 
 
     def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
