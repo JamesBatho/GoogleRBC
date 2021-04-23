@@ -352,11 +352,11 @@ class GoogleWantsOurAlgorithm(Player):
         # print(' ')
         # print(sense_result)
         # we have sensed, now let's throw away any boards which don't match our sense
-        # this is done by checking every sceneario and 
+        # this is done by checking every scenario and 
         temp_board = chess.Board()
         newBoards = {}
         for k in self.possible_boards:
-            temp_board.reset()           # faster than creting a new board
+            temp_board.reset()           # faster than creating a new board
             temp_board.set_fen(k)
             
             # all the scenarios where the board is not valid
@@ -397,7 +397,8 @@ class GoogleWantsOurAlgorithm(Player):
                         break
             
             if good:
-                newBoards[k] = 1
+
+                newBoards[k] = 1 #old board value here since nothing has changed
 
         self.possible_boards = newBoards
         # print('S handle_sense_result:  ', len(self.possible_boards))
@@ -406,7 +407,7 @@ class GoogleWantsOurAlgorithm(Player):
         # ______ Variables: 
         #   -  move_actions – A list containing the valid chess.Move you can choose.
         #   -   This will give bad pawn moves!
-        #   -   possibly mocves through oponent pieces? havent tested that yet
+        #   -   possibly moves through oponent pieces? havent tested that yet
         #   -  seconds_left – The time in seconds you have left to use in the game. 
         # ______ Logic: 
         #   - This is good information: we can further restrict our boards by removing ones where the valid moves don't match up
@@ -425,7 +426,7 @@ class GoogleWantsOurAlgorithm(Player):
             temp_board.reset()           
             temp_board.set_fen(k)
             if temp_board.turn != self.color:
-                print('THE BOARD IS ON THE WRONG TURN! THIS IS BAD')
+                print('THE BOARD IS ON THE WRONG TURN! THIS IS BAD mmmmmmkay')
 
             board_moves = self.get_pseudo_legal_moves(temp_board)      # get the legal moves for the board
             l_board_moves = self.get_pseudo_legal_moves(temp_board)      # get the legal moves for the board
@@ -477,12 +478,12 @@ class GoogleWantsOurAlgorithm(Player):
         #   -  capture_square – If a capture occurred, then the Square that the opponent piece was taken on, otherwise None.
         # _______ Logic
         #   -  In our move logic we have restricted everything to legal moves
-        #   -  Taken != requested? This means we captured too early
+        #   -  Taken != requested? This means we captured too early--?  not sure what this means
         #   -  Captured  
         
 
         # not the same
-            # pawmn takes but cant - all boards where you could take no longer valie
+            # pawmn takes but cant - all boards where you could take no longer valid
             # pawn forward  but cant - any board that doesnt have oponenet piece there is no god
             # pawn forward two - only gets one
             # castling - cant 
@@ -494,6 +495,23 @@ class GoogleWantsOurAlgorithm(Player):
         # print(' ')
 
 
+        ###Cases: 
+        ## requested move == taken move --> we chose a valid move and made a valid move or none --> update boards with move: no boards are removed from possible 
+        ## requested move != taken move --> we chose an invalid move and now need to update possible boards: 
+
+        ### invalid move cases 
+        # piece blocking our move
+        # if queen, rook, bishop --> capture at square taken_move --> all boards that don't have a piece on capture square are gone: update boards with capture 
+        # 
+        #if king- castling --> move is now none, --> any board with valid castling now gone: two cases queen/kingside castle
+        # 
+        #if pawn: three cases: try to capture and cant --> all boards that don't have a piece on capture square are invalid: move is none 
+        # try to move pawn one/two 
+        # try one and cant --> all boards that don't have a piece on move square are invalid: move is none 
+        #try two and cant: pawn moves one: all boards that dont have a piece on second square are invalid-> move is pawn up one
+        # pawn moves none: all boards that don't have a piece on first square are invalid --> move is none 
+
+
         if captured_opponent_piece:
             print('captured a piece')
 
@@ -501,78 +519,153 @@ class GoogleWantsOurAlgorithm(Player):
             print('did not capture')
 
         if requested_move == None:
-            print('we didnt requested a move')
+            print('we didnt request a move')
             return 
 
+        newBoards = {}
+        temp_board = chess.Board()
+        if requested_move == taken_move: # valid move update boards 
 
-        else:
-            newBoards = {}
-            temp_board = chess.Board()
-            
-            # if the move happens, then let's make the move
-            if taken_move is not None:
-                # if we made a move
+            for k in self.possible_boards:
+                temp_board.reset()
+                temp_board.set_fen(k)
+                temp_board.push(requested_move) #or taken move might be more precise :) 
+                newBoards[temp_board.fen()] = 1 #score value to be updated 
+        else: #requested move is not taken move --> we chose an invalid move
+
+        #how to check board to see what type of move we make? 
+        ##queen, rook, bishop move is requested
+            if qbr_move: 
+                for k in self.possible_boards:     
+                    temp_board.reset()           
+                    temp_board.set_fen(k) 
+                    ### now check for piece 
+                    if not temp_board.piece_at(capture_square): #is this actual method? 
+                        continue
+                    
+                    temp_board.push(taken_move)
+                    newBoards[temp_board.fen()] = 1 #score value to be updated 
+            if king_move:
+                for k in self.possible_boards:     
+                    temp_board.reset()           
+                    temp_board.set_fen(k) 
+                    king_square= temp_board.king(self.color)
+                    if:  #kingside castle: 
+                        if (temp_board.piece_at(king_square + 1) || temp_board.piece_at(king_square + 2)):
+                            continue
+                        ### move is now none 
+                        newBoards[temp_board.fen()] = 1 #score value to be updated
+                    else: #queenside 
+                        if (temp_board.piece_at(king_square - 1) || temp_board.piece_at(king_square - 2) || temp_board.piece_at(king_square-3)):
+                            continue
+                        ### move is now none 
+                        newBoards[temp_board.fen()] = 1 #score value to be updated
+            if pawn_move: 
                 for k in self.possible_boards:     
                     temp_board.reset()           
                     temp_board.set_fen(k)
+                    ## need to get initial pawn square 
+                    pawn_square = some_square 
+                    if taken_move is None:  ## immediately blocked 
+                        if temp_board.piece_at(pawn_square+8):
+                            continue
+                    elif taken_move is (pawn_square+8): ## blocked after one square 
+                        if temp_board.piece_at(pawn_square + 16):
+                            continue
+                    else: #must be attemped capture
+                        # if right capture 
+                        if attempted_right_capture:
+                            if temp_board.piece_at(pawn_square + 9):
+                                continue
+                        else: #attempted left capture
+                            if temp_board.piece_at(pawn_square + 7 ):
+                                continue
+                    temp_board.push(taken_move)
+                    newBoards[temp_board.fen()] = 1 #score value to be updated
+        
+        self.possible_boards = newBoards
+                        
 
-                    # if its legal, then make it
-                    if taken_move in temp_board.pseudo_legal_moves:
 
-                        # if we take the king, and the game isnt over, we don't want this board
-                        if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None) and (temp_board.piece_at(capture_square).piece_type != chess.KING):
-                            temp_board.push(taken_move)
-                            newBoards[temp_board.fen()] = 1
+
+
+
+
+
+
+        # else:  #we have a requested move
+        #     newBoards = {}
+        #     temp_board = chess.Board()
+            
+        #     # if the move happens, then let's make the move
+        #     if taken_move is not None:
+        #         # if we made a move
+        #         for k in self.possible_boards:     
+        #             temp_board.reset()           
+        #             temp_board.set_fen(k)
+
+        #             # if its legal, then make it
+        #             if taken_move in temp_board.pseudo_legal_moves:
+
+        #                 # if we take the king, and the game isnt over, we don't want this board
+        #                 if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None) and (temp_board.piece_at(capture_square).piece_type != chess.KING):
+        #                     temp_board.push(taken_move)
+        #                     newBoards[temp_board.fen()] = 1
                             
 
-                        # we dont capture, and there isn't a piece on our board, keep the board
-                        elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):
-                            temp_board.push(taken_move)
-                            newBoards[temp_board.fen()] = 1
+        #                 # we dont capture, and there isn't a piece on our board, keep the board
+        #                 elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):
+        #                     temp_board.push(taken_move)
+        #                     newBoards[temp_board.fen()] = 1
 
 
-                        # note the two cases we do not use a board
-                        #   *  captured_opponent_pierce is true, and there is no piece there
-                        #   *  captured_opponent_piece is false, and there is a piece  there
+        #                 # note the two cases we do not use a board
+        #                 #   *  captured_opponent_pierce is true, and there is no piece there
+        #                 #   *  captured_opponent_piece is false, and there is a piece  there
 
-            else:
-                # if we tried to make a move but couldnt - don't update any boards 
-                newBoards = {}
-                temp_board = chess.Board()
+        #     else: #taken_move != requested move
+        #         # if we tried to make a move but couldnt - don't update any boards 
+        #         newBoards = {}
+        #         temp_board = chess.Board()
 
-                for k in self.possible_boards:     
-                    temp_board.reset()           
-                    temp_board.set_fen(k)
-                    temp_board.turn = not temp_board.turn
-                    newBoards[temp_board.fen()] = 1
+        #         for k in self.possible_boards:     
+        #             temp_board.reset()           
+        #             temp_board.set_fen(k)
+        #             temp_board.turn = not temp_board.turn
+        #             newBoards[temp_board.fen()] = 1 #score value for updated board
                
                 
-                ### TODO ####
-                # there is information here
-                #  big one is pawns:
-                #  if we try to take diagonally and can't.
-                # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
-                ### TODO ### 
+        #         ### TODO ####
+        #         # there is information here
+        #         #  big one is pawns:
+        #         #  if we try to take diagonally and can't.
+        #         # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
+        #         ### TODO ### 
 
 
-                # if it was a pawn
-                # for k in self.possible_boards:     
-                #     temp_board.reset()           
-                #     temp_board.set_fen(k)
+        #         # if it was a pawn
+        #         # for k in self.possible_boards:     
+        #         #     temp_board.reset()           
+        #         #     temp_board.set_fen(k)
 
-                #     if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
-                #         # if it moved diagonally (modulus 8 is not the same)
-                #         if requested_move.to_square % 8 != requested_move.from_square % 8:
-                #             continue
-                #         else: 
-                #             newBoards[temp_board.fen()] = 1
-                #  * what information can we get from this scenario
-                #  * e.g. a pawn that couldn't take but tried
+        #         #     if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
+        #         #         # if it moved diagonally (modulus 8 is not the same)
+        #         #         if requested_move.to_square % 8 != requested_move.from_square % 8:
+        #         #             continue
+        #         #         else: 
+        #         #             newBoards[temp_board.fen()] = 1
+        #         #  * what information can we get from this scenario
+        #         #  * e.g. a pawn that couldn't take but tried
 
-            self.possible_boards = newBoards
+        #     self.possible_boards = newBoards
 
-        print('E handle_move_result:  ', len(self.possible_boards))
-        print(' ')
+        # print('E handle_move_result:  ', len(self.possible_boards))
+        # print(' ')
+
+
+
+
+
 
     def handle_game_end(self, winner_color: Optional[Color], win_reason: Optional[WinReason],
                         game_history: GameHistory):
