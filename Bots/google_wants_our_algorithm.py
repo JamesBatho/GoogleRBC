@@ -569,7 +569,7 @@ class GoogleWantsOurAlgorithm(Player):
                     if taken_move is None:  ## immediately blocked 
                         if temp_board.piece_at(pawn_square+8):
                             continue
-                    elif taken_move is (pawn_square+8): ## blocked after one square 
+                    elif taken_move is (pawn_square+8): ## blocked after one square
                         if temp_board.piece_at(pawn_square + 16):
                             continue
                     else: #must be attemped capture
@@ -582,85 +582,79 @@ class GoogleWantsOurAlgorithm(Player):
                                 continue
                     temp_board.push(taken_move)
                     newBoards[temp_board.fen()] = 1 #score value to be updated
-        
-        self.possible_boards = newBoards
-                        
 
 
 
 
 
-
-
-
-        # else:  #we have a requested move
-        #     newBoards = {}
-        #     temp_board = chess.Board()
+        else:  #we have a requested move
+            newBoards = {}
+            temp_board = chess.Board()
             
-        #     # if the move happens, then let's make the move
-        #     if taken_move is not None:
-        #         # if we made a move
-        #         for k in self.possible_boards:     
-        #             temp_board.reset()           
-        #             temp_board.set_fen(k)
+            # if the move happens, then let's make the move
+            if taken_move is not None:
+                # if we made a move
+                for k in self.possible_boards:     
+                    temp_board.reset()           
+                    temp_board.set_fen(k)
 
-        #             # if its legal, then make it
-        #             if taken_move in temp_board.pseudo_legal_moves:
+                    # if its legal, then make it
+                    if taken_move in temp_board.pseudo_legal_moves:
 
-        #                 # if we take the king, and the game isnt over, we don't want this board
-        #                 if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None) and (temp_board.piece_at(capture_square).piece_type != chess.KING):
-        #                     temp_board.push(taken_move)
-        #                     newBoards[temp_board.fen()] = 1
+                        # if we take the king, and the game isnt over, we don't want this board
+                        if (captured_opponent_piece == True) and (temp_board.piece_at(capture_square) is not None) and (temp_board.piece_at(capture_square).piece_type != chess.KING):
+                            temp_board.push(taken_move)
+                            newBoards[temp_board.fen()] = 1
                             
 
-        #                 # we dont capture, and there isn't a piece on our board, keep the board
-        #                 elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):
-        #                     temp_board.push(taken_move)
-        #                     newBoards[temp_board.fen()] = 1
+                        # we dont capture, and there isn't a piece on our board, keep the board
+                        elif (captured_opponent_piece == False) and (temp_board.piece_at(taken_move.to_square) is None):
+                            temp_board.push(taken_move)
+                            newBoards[temp_board.fen()] = 1
 
 
-        #                 # note the two cases we do not use a board
-        #                 #   *  captured_opponent_pierce is true, and there is no piece there
-        #                 #   *  captured_opponent_piece is false, and there is a piece  there
+                        # note the two cases we do not use a board
+                        #   *  captured_opponent_pierce is true, and there is no piece there
+                        #   *  captured_opponent_piece is false, and there is a piece  there
 
-        #     else: #taken_move != requested move
-        #         # if we tried to make a move but couldnt - don't update any boards 
-        #         newBoards = {}
-        #         temp_board = chess.Board()
+            else: #taken_move != requested move
+                # if we tried to make a move but couldnt - don't update any boards 
+                newBoards = {}
+                temp_board = chess.Board()
 
-        #         for k in self.possible_boards:     
-        #             temp_board.reset()           
-        #             temp_board.set_fen(k)
-        #             temp_board.turn = not temp_board.turn
-        #             newBoards[temp_board.fen()] = 1 #score value for updated board
+                for k in self.possible_boards:     
+                    temp_board.reset()           
+                    temp_board.set_fen(k)
+                    temp_board.turn = not temp_board.turn
+                    newBoards[temp_board.fen()] = 1 #score value for updated board
                
                 
-        #         ### TODO ####
-        #         # there is information here
-        #         #  big one is pawns:
-        #         #  if we try to take diagonally and can't.
-        #         # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
-        #         ### TODO ### 
+                ### TODO ####
+                # there is information here
+                #  big one is pawns:
+                #  if we try to take diagonally and can't.
+                # also something about trying to move two forward and only getting one... leave that for later, thats in an eleif above this level
+                ### TODO ### 
 
 
-        #         # if it was a pawn
-        #         # for k in self.possible_boards:     
-        #         #     temp_board.reset()           
-        #         #     temp_board.set_fen(k)
+                # if it was a pawn
+                # for k in self.possible_boards:     
+                #     temp_board.reset()           
+                #     temp_board.set_fen(k)
 
-        #         #     if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
-        #         #         # if it moved diagonally (modulus 8 is not the same)
-        #         #         if requested_move.to_square % 8 != requested_move.from_square % 8:
-        #         #             continue
-        #         #         else: 
-        #         #             newBoards[temp_board.fen()] = 1
-        #         #  * what information can we get from this scenario
-        #         #  * e.g. a pawn that couldn't take but tried
+                #     if (temp_board.piece_at(requested_move.from_square) is not None) and (temp_board.piece_at(requested_move.from_square).piece_type == chess.PAWN):
+                #         # if it moved diagonally (modulus 8 is not the same)
+                #         if requested_move.to_square % 8 != requested_move.from_square % 8:
+                #             continue
+                #         else: 
+                #             newBoards[temp_board.fen()] = 1
+                #  * what information can we get from this scenario
+                #  * e.g. a pawn that couldn't take but tried
 
-        #     self.possible_boards = newBoards
+            self.possible_boards = newBoards
 
-        # print('E handle_move_result:  ', len(self.possible_boards))
-        # print(' ')
+        print('E handle_move_result:  ', len(self.possible_boards))
+        print(' ')
 
 
 
