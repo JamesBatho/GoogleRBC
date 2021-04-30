@@ -37,7 +37,7 @@ class GoogleWantsOurAlgorithm(Player):
         self.engine = chess.engine.SimpleEngine.popen_uci(self.stockfish_path, setpgrp=True)
         
         self.moved                              = False                            # used to skip handle_opponent_move_result if we are white and its the first turn
-        self.board_eval_time                    = 0.1                              # how long should we evaluate boards    
+        self.board_eval_time                    = 0.05                             # how long should we evaluate boards    
         self.possible_boards                    = []                               # list to keep all posible board fens
         self.possible_scores                    = []                               # list to keep all of the scores
         self.possible_moves                     = []                               # list to keep all engine moves per board
@@ -406,7 +406,8 @@ class GoogleWantsOurAlgorithm(Player):
 
         if requested_move == None:                                                   # if we dont make a move, no need to do anything
             print('we didnt requested a move')
-            for k in self.possible_boards:
+            for i in range(len(self.possible_boards)):                                  # if our board has a move that isnt in the move list, it is not valid
+                k = self.possible_boards[i]
                 temp_board.reset()
                 temp_board.set_fen(k)                                                # modify all the turns
                 temp_board.turn = not temp_board.turn
@@ -422,7 +423,8 @@ class GoogleWantsOurAlgorithm(Player):
 
         if requested_move == taken_move: # valid move update boards 
 
-            for k in self.possible_boards:
+            for i in range(len(self.possible_boards)):                                  # if our board has a move that isnt in the move list, it is not valid
+                k = self.possible_boards[i]
                 temp_board.reset()
                 temp_board.set_fen(k)
                 temp_board.push(taken_move)                                                 # execute the move
@@ -434,41 +436,49 @@ class GoogleWantsOurAlgorithm(Player):
         #how to check board to see what type of move we make? 
         ##queen, rook, bishop move is requested
             if qbr_move: 
-                for k in self.possible_boards:     
+                for i in range(len(self.possible_boards)):                                  # if our board has a move that isnt in the move list, it is not valid
+                    k = self.possible_boards[i] 
                     temp_board.reset()           
                     temp_board.set_fen(k) 
                     ### now check for piece 
                     if not temp_board.piece_at(capture_square): #is this actual method? 
                         continue
-                    
 
                     temp_board.push(taken_move)                                                 # execute the move
                     new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
                     new_scores = new_scores + [self.possible_scores[i]]
                     new_moves  = new_moves  + [self.possible_moves[i]]
+            
             if king_move:
-                for k in self.possible_boards:     
+                for i in range(len(self.possible_boards)):                                  # if our board has a move that isnt in the move list, it is not valid
+                    k = self.possible_boards[i] 
                     temp_board.reset()           
                     temp_board.set_fen(k) 
                     king_square= temp_board.king(self.color)
-                    if:  #kingside castle: 
-                        if (temp_board.piece_at(king_square + 1) || temp_board.piece_at(king_square + 2)):
+                    
+                    # ********************************************************************************************
+                    # TODO: Janie add the necessary logic here (replace 1 ==0 with if kingside casele or something)
+                    # ********************************************************************************************
+                    if 1 == 0:  #kingside castle:                                                               
+                        if (temp_board.piece_at(king_square + 1) or temp_board.piece_at(king_square + 2)):
                             continue
-                        ### move is now none 
-                    temp_board.turn = not temp_board.turn     
-                    new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
-                    new_scores = new_scores + [self.possible_scores[i]]
-                    new_moves  = new_moves  + [self.possible_moves[i]]
+                            ### move is now none 
+                        temp_board.turn = not temp_board.turn     
+                        new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
+                        new_scores = new_scores + [self.possible_scores[i]]
+                        new_moves  = new_moves  + [self.possible_moves[i]]
                     else: #queenside 
-                        if (temp_board.piece_at(king_square - 1) || temp_board.piece_at(king_square - 2) || temp_board.piece_at(king_square-3)):
+                        if (temp_board.piece_at(king_square - 1) or temp_board.piece_at(king_square - 2) or temp_board.piece_at(king_square-3)):
                             continue
-                        ### move is now none 
-                    temp_board.turn = not temp_board.turn     
-                    new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
-                    new_scores = new_scores + [self.possible_scores[i]]
-                    new_moves  = new_moves  + [self.possible_moves[i]]
+                            ### move is now none 
+                        temp_board.turn = not temp_board.turn     
+                        new_boards = new_boards + [temp_board.fen()]                                # add the board to our new_boards object
+                        new_scores = new_scores + [self.possible_scores[i]]
+                        new_moves  = new_moves  + [self.possible_moves[i]]
+            
             if pawn_move: 
-                for k in self.possible_boards:     
+                for i in range(len(self.possible_boards)):                                  # if our board has a move that isnt in the move list, it is not valid
+                    k = self.possible_boards[i]
                     temp_board.reset()           
                     temp_board.set_fen(k)
                     ## need to get initial pawn square 
